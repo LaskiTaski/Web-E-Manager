@@ -1,0 +1,577 @@
+{% load static %}
+{% csrf_token %}
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>Web-E Manager</title>
+  <style>
+      body {
+          font-family: Arial, sans-serif;
+          margin: 2rem;
+          background-color: #f4f4f9;
+          color: #333;
+      }
+
+      h1 {
+          color: #2c3e50;
+          font-size: 2rem;
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+      }
+
+      h1::before {
+          content: "🍽";
+          font-size: 2rem;
+      }
+
+      button {
+          background-color: #27ae60;
+          color: white;
+          border: none;
+          padding: 0.5rem 1rem;
+          border-radius: 5px;
+          cursor: pointer;
+      }
+
+      button:hover {
+          background-color: #219150;
+      }
+
+      .modal, .payment-modal {
+          display: none;
+          position: fixed;
+          z-index: 1;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
+          overflow: auto;
+          background-color: rgba(0, 0, 0, 0.4);
+      }
+
+      .modal-content, .payment-content {
+          background-color: #fff;
+          margin: 5% auto;
+          padding: 20px;
+          border: 1px solid #888;
+          width: 70%;
+          border-radius: 10px;
+          position: relative;
+      }
+
+      .payment-content {
+          z-index: 2;
+          width: 300px;
+          text-align: center;
+      }
+
+      .total-display {
+          font-weight: bold;
+          font-size: 1.2rem;
+          margin-top: 1rem;
+      }
+
+      hr {
+          border: 1px solid #ccc;
+          margin: 2rem 0;
+      }
+
+      .tables-container {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1.5rem;
+          justify-items: center;
+          margin-top: 2rem;
+      }
+
+      .table {
+          width: 240px;
+          height: 150px;
+          background-color: #DCDCDC;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 2rem;
+          font-weight: bold;
+          cursor: pointer;
+          transition: background-color 0.3s;
+      }
+
+      .table.active {
+          background-color: #BDECB6;
+      }
+
+      .tables-container .table:nth-child(7) {
+          grid-column: 2;
+      }
+
+      .menu-search {
+          position: sticky;
+          top: 0;
+          background: white;
+          padding-bottom: 1rem;
+          z-index: 10;
+      }
+
+      .menu-search input {
+          width: 100%;
+          padding: 0.5rem;
+          font-size: 1rem;
+          border: 1px solid #ccc;
+          border-radius: 6px;
+      }
+
+      .menu-section {
+          margin-bottom: 2rem;
+      }
+
+      .menu-section h3 {
+          text-align: center;
+          font-size: 1.2rem;
+          margin: 1rem 0 0.5rem;
+      }
+
+      .menu-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: 1rem;
+      }
+
+      .menu-item {
+          border: 1px solid #ccc;
+          border-radius: 8px;
+          padding: 0.5rem;
+          background: #fff;
+          cursor: pointer;
+          text-align: center;
+      }
+
+      .menu-item:hover {
+          background-color: #d8f5d1;
+      }
+
+      .qty-modal {
+          display: none;
+          position: fixed;
+          z-index: 2;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
+          background-color: rgba(0, 0, 0, 0.4);
+      }
+
+      .qty-content {
+          background-color: white;
+          margin: 10% auto;
+          padding: 1.5rem;
+          width: 300px;
+          border-radius: 10px;
+          text-align: center;
+      }
+
+      .qty-controls {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          margin: 1rem 0;
+      }
+
+      .qty-controls input {
+          width: 50px;
+          text-align: center;
+          font-size: 1.2rem;
+      }
+
+      .order-items {
+          margin-bottom: 1rem;
+      }
+
+      .order-item {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 5px;
+          background-color: #BDECB6;
+          padding: 5px;
+          border-radius: 5px;
+      }
+
+      .order-item span {
+          margin: 0 5px;
+      }
+
+      .order-item button {
+          background-color: #e74c3c;
+          padding: 0 0.5rem;
+          border-radius: 4px;
+      }
+
+      .menu-item.selected {
+          background-color: #BDECB6;
+      }
+
+
+  </style>
+</head>
+<body>
+<h1>EffectiveMobile</h1>
+<hr>
+
+<div class="tables-container">
+  {% for i in "1234567" %}
+    <div class="table" id="table-{{ i }}" onclick="handleTableClick({{ i }})">{{ i }}</div>
+  {% endfor %}
+</div>
+
+<!-- Модалка заказа -->
+<div class="modal" id="orderModal">
+  <div class="modal-content">
+    <h2 id="modal-title">Заказ</h2>
+    <form id="order-form">
+      <p>Стол № <span id="modal-table-number"></span></p>
+      <div class="menu-search">
+        <div class="order-items" id="order-items"></div>
+
+        <!-- Кнопка “Меню” для отображения списка блюд -->
+        <button type="button" onclick="toggleMenuSection()">Меню</button>
+
+        <!-- Блок меню (отображается по кнопке “Меню”) -->
+        <div id="menu-section-container" style="display:none">
+          <div class="menu-search">
+            <input type="text" id="menu-search" placeholder="Поиск блюда...">
+          </div>
+          <div id="menu-sections"></div>
+        </div>
+
+      </div>
+      <div id="menu-sections"></div>
+      <hr>
+      <div class="total-display" id="total-display">Сумма: 0 ₽</div>
+      <br>
+      <button type="submit">Сохранить</button>
+      <button type="button" onclick="openPaymentModal()">Рассчитать</button>
+      <button type="button" onclick="closeOrderModal()">Отмена</button>
+    </form>
+  </div>
+</div>
+
+<!-- Модалка количества -->
+<div class="qty-modal" id="qtyModal">
+  <div class="qty-content">
+    <h3 id="qtyDishName"></h3>
+    <div class="qty-controls">
+      <button type="button" onclick="adjustQty(-1)">−</button>
+      <input type="number" id="qtyInput" value="1" min="1">
+      <button type="button" onclick="adjustQty(1)">+</button>
+    </div>
+    <button onclick="confirmQty()">Добавить</button>
+    <br><br>
+    <button onclick="closeQtyModal()">Отмена</button>
+  </div>
+</div>
+
+<!-- Модалка расчёта -->
+<div class="payment-modal" id="paymentModal">
+  <div class="payment-content">
+    <h3>Выберите способ оплаты</h3>
+    <button onclick="completePayment('cash')">Наличные</button>
+    <button onclick="completePayment('card')">Картой</button>
+    <br><br>
+    <button onclick="closePaymentModal()">Назад</button>
+  </div>
+</div>
+
+<script>
+    const activeOrders = {};
+    let currentEditingOrder = null;
+
+    function handleTableClick(tableNumber) {
+        const order = activeOrders[tableNumber];
+        currentEditingOrder = order || {table_number: tableNumber, items: [], status: 'pending'};
+        openOrderModal(currentEditingOrder);
+    }
+
+    function openOrderModal(order) {
+        document.getElementById('orderModal').style.display = 'block';
+        document.getElementById('modal-table-number').textContent = order.table_number;
+        renderMenu();
+    }
+
+    function closeOrderModal() {
+        document.getElementById('orderModal').style.display = 'none';
+    }
+
+    function updateTotalDisplay() {
+        const total = currentEditingOrder.items.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
+        document.getElementById('total-display').textContent = Сумма: ${total} ₽;
+        renderOrderItems();
+    }
+
+
+    function toggleMenuSection() {
+        const section = document.getElementById('menu-section-container');
+        section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function renderOrderItems() {
+        const container = document.getElementById('order-items');
+        container.innerHTML = '';
+        currentEditingOrder.items.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'order-item';
+            div.innerHTML =
+      <span>${item.name}</span>
+      <span>${item.price}₽</span>
+      <span>x${item.quantity}</span>
+      <button onclick="removeItem(${index})">×</button>
+    ;
+            container.appendChild(div);
+        });
+    }
+
+    function removeItem(index) {
+        currentEditingOrder.items.splice(index, 1);
+        renderOrderItems();
+        updateTotalDisplay();
+    }
+
+
+    async function loadActiveOrders() {
+        const res = await fetch('/api/orders/');
+        const data = await res.json();
+        data.forEach(order => {
+            if (order.status !== 'paid') {
+                activeOrders[order.table_number] = order;
+                const el = document.getElementById('table-' + order.table_number);
+                if (el) el.classList.add('active');
+            }
+        });
+    }
+
+    function openPaymentModal() {
+        document.getElementById('paymentModal').style.display = 'block';
+    }
+
+    function closePaymentModal() {
+        document.getElementById('paymentModal').style.display = 'none';
+    }
+
+    async function completePayment(method) {
+        if (!currentEditingOrder) return;
+        await fetch(/api/orders/${currentEditingOrder.id}/, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify({status: 'paid'})
+        });
+        closePaymentModal();
+        closeOrderModal();
+        location.reload();
+    }
+
+    const fullMenu = {
+        "Кофе и чай": [
+            {"name": "Эспрессо", "price": 150},
+            {"name": "Американо", "price": 180},
+            {"name": "Капучино", "price": 220},
+            {"name": "Латте", "price": 250},
+            {"name": "Раф", "price": 280},
+            {"name": "Флэт Уайт", "price": 260},
+            {"name": "Моккачино", "price": 290},
+            {"name": "Чай черный", "price": 120},
+            {"name": "Чай зеленый", "price": 120},
+            {"name": "Чай фруктовый", "price": 150},
+            {"name": "Какао", "price": 200},
+            {"name": "Глинтвейн (безалкогольный)", "price": 350},
+            {"name": "Имбирный чай", "price": 200},
+            {"name": "Облепиховый чай", "price": 250}
+
+        ],
+        "Холодные напитки": [
+            {"name": "Свежевыжатый апельсиновый сок", "price": 300},
+            {"name": "Смузи ягодный", "price": 350},
+            {"name": "Вода минеральная (0.5л)", "price": 80},
+            {"name": "Кола (0.33л)", "price": 150}
+        ],
+        "Выпечка и десерты": [
+            {"name": "Круассан классический", "price": 180},
+            {"name": "Круассан с миндалем", "price": 220},
+            {"name": "Маффин шоколадный", "price": 200},
+            {"name": "Чизкейк Нью-Йорк", "price": 350},
+            {"name": "Тирамису", "price": 380},
+            {"name": "Эклер ванильный", "price": 250},
+            {"name": "Медовик", "price": 320},
+            {"name": "Брауни", "price": 280},
+            {"name": "Печенье овсяное", "price": 80},
+            {"name": "Сырники со сметаной", "price": 300},
+            {"name": "Блинчики с творогом", "price": 280},
+            {"name": "Шоколадный торт", "price": 400},
+            {"name": "Творожная запеканка", "price": 300},
+            {"name": "Вафли с мороженым", "price": 300},
+
+            {"name": "Мороженое (1 шарик)", "price": 120},
+            {"name": "Банановый сплит", "price": 400}
+        ],
+        "Салаты": [
+            {"name": "Салат Цезарь с курицей", "price": 450},
+            {"name": "Салат Греческий", "price": 400},
+            {"name": "Салат Оливье", "price": 350}
+        ],
+        "Супы": [
+            {"name": "Томатный суп", "price": 300},
+            {"name": "Крем-суп грибной", "price": 350},
+            {"name": "Борщ", "price": 320},
+            {"name": "Солянка", "price": 380}
+        ],
+        "Паста и гарниры": [
+            {"name": "Паста Карбонара", "price": 500},
+            {"name": "Паста Болоньезе", "price": 520},
+            {"name": "Рис с овощами", "price": 380},
+            {"name": "Картофель фри", "price": 250},
+            {"name": "Картофель по-деревенски", "price": 280}
+        ],
+        "Основные блюда": [
+            {"name": "Стейк из лосося", "price": 750},
+            {"name": "Куриная грудка на гриле", "price": 480},
+            {"name": "Бургер с говядиной", "price": 550},
+            {"name": "Вегетарианский бургер", "price": 480},
+            {"name": "Жаркое по-домашнему", "price": 450}
+
+        ],
+        "Пицца и закуски": [
+            {"name": "Пицца Маргарита", "price": 600},
+            {"name": "Пицца Пепперони", "price": 650},
+            {"name": "Сэндвич с курицей и овощами", "price": 350},
+            {"name": "Ролл с лососем", "price": 400},
+            {"name": "Сырная тарелка", "price": 600},
+            {"name": "Фруктовая тарелка", "price": 550}
+        ],
+        "Завтраки": [
+            {"name": "Омлет с ветчиной и сыром", "price": 320},
+            {"name": "Яичница-глазунья (2 яйца)", "price": 150},
+            {"name": "Каша овсяная с фруктами", "price": 250}
+        ],
+
+        "Восточная кухня": [
+            {"name": "Шашлык из свинины", "price": 650},
+            {"name": "Люля-кебаб", "price": 580},
+            {"name": "Хачапури по-аджарски", "price": 450},
+            {"name": "Хинкали (5 шт)", "price": 400},
+            {"name": "Манты (3 шт)", "price": 350},
+            {"name": "Самса с мясом", "price": 250},
+            {"name": "Плов", "price": 480}
+
+        ],
+        "Домашняя кухня": [
+            {"name": "Вареники с картошкой", "price": 300},
+            {"name": "Пельмени домашние", "price": 350},
+            {"name": "Голубцы", "price": 400}
+        ],
+        "Алкоголь": [
+            {"name": "Сидр", "price": 300}
+        ]
+    };
+
+    function renderMenu(filter = '') {
+        const container = document.getElementById("menu-sections");
+        container.innerHTML = '';
+        Object.entries(fullMenu).forEach(([category, items]) => {
+            const filtered = items.filter(i => i.name.toLowerCase().includes(filter.toLowerCase()));
+            if (filtered.length === 0) return;
+
+            const section = document.createElement('div');
+            section.className = 'menu-section';
+
+            const title = document.createElement('h3');
+            title.textContent = category;
+            section.appendChild(title);
+
+            const grid = document.createElement('div');
+            grid.className = 'menu-grid';
+
+            filtered.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'menu-item';
+                el.textContent = ${item.name} - ${item.price}₽;
+                el.classList.toggle('selected', !!currentEditingOrder.items.find(i => i.name === item.name));
+                el.onclick = () => {
+                    showQtyModal(item);
+                };
+                grid.appendChild(el);
+            });
+
+            section.appendChild(grid);
+            container.appendChild(section);
+        });
+    }
+
+    document.getElementById('menu-search').addEventListener('input', () => {
+        renderMenu(document.getElementById('menu-search').value);
+    });
+
+    document.getElementById('order-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        const data = {
+            table_number: currentEditingOrder.table_number,
+            items: currentEditingOrder.items,
+            status: currentEditingOrder.status || 'pending'
+        };
+        const url = currentEditingOrder.id ? /api/orders/${currentEditingOrder.id}/ : '/api/orders/';
+        const method = currentEditingOrder.id ? 'PATCH' : 'POST';
+        await fetch(url, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify(data)
+        });
+        closeOrderModal();
+        location.reload();
+    });
+
+    document.addEventListener('DOMContentLoaded', loadActiveOrders);
+
+    let selectedDish = null;
+
+    function showQtyModal(dish) {
+        selectedDish = dish;
+        document.getElementById('qtyDishName').textContent = dish.name;
+        document.getElementById('qtyInput').value = 1;
+        document.getElementById('qtyModal').style.display = 'block';
+    }
+
+    function closeQtyModal() {
+        document.getElementById('qtyModal').style.display = 'none';
+    }
+
+    function adjustQty(delta) {
+        const input = document.getElementById('qtyInput');
+        let value = parseInt(input.value) || 1;
+        value = Math.max(1, value + delta);
+        input.value = value;
+    }
+
+    function confirmQty() {
+        const qty = parseInt(document.getElementById('qtyInput').value) || 1;
+        const existing = currentEditingOrder.items.find(i => i.name === selectedDish.name);
+        if (!existing) {
+            currentEditingOrder.items.push({...selectedDish, quantity: qty});
+        } else {
+            existing.quantity += qty;
+        }
+        closeQtyModal();
+        updateTotalDisplay();
+    }
+
+</script>
+</body>
+</html>
